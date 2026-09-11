@@ -1,0 +1,17 @@
+Third-party notice
+==================
+
+The MIT license in LICENSE covers the source code in this repository.
+
+Bundled artwork is the exception:
+
+- assets/favicon.svg, assets/lobster1024.png, assets/claw.png,
+  assets/claw@2x.png, assets/apple-touch-icon.png, assets/favicon-32.png
+
+  The OpenClaw lobster mascot. Taken from the official OpenClaw npm package
+  (dist/control-ui/favicon.svg) and re-rasterised for menu-bar use. Copyright
+  belongs to the OpenClaw project (https://github.com/openclaw/openclaw).
+
+  It is included here only so the menu-bar icon matches the upstream brand.
+  If the OpenClaw maintainers would prefer it not be redistributed this way,
+  open an issue and it will be removed immediately.

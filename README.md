@@ -142,4 +142,4 @@ OpenClaw 官方吉祥物的**矢量图**就在它自己的 npm 包里:
 ## 许可
 
 [MIT](LICENSE) © 2026 zhqowo —— 随便用、改、商用,保留版权声明即可。
-内置的龙虾素材版权归 OpenClaw 项目,详见 [LICENSE](LICENSE) 末尾。
+内置的龙虾素材版权归 OpenClaw 项目,详见 [NOTICE](NOTICE)。

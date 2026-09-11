@@ -19,10 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
----
-
-Note on bundled artwork: the lobster mascot artwork is taken from the official
-OpenClaw npm package (`dist/control-ui/favicon.svg`) and remains the property of
-the OpenClaw project. It is included here only so the menu-bar icon matches the
-upstream brand; see the "图标是怎么来的" section of README.md.
