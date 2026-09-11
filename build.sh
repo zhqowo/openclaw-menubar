@@ -3,7 +3,14 @@
 # it to the Desktop. Self-contained: everything is read from this script's own
 # directory, so it can be re-run any time:
 #
-#     zsh ~/DeepSeekHarness/migration/openclaw-menubar/build.sh
+#     zsh build.sh
+#
+# To build WITHOUT touching an installed copy (e.g. to produce a distributable zip):
+#
+#     OPENCLAW_APP_OUT=/tmp/claw-staging/OpenClaw.app zsh build.sh
+#
+# In that mode the script never replaces ~/Desktop/OpenClaw.app, never kills a
+# running ClawLauncher, never nudges Finder, and never launches the result.
 #
 # Same three macOS gotchas 大肥鱼.app's build works around:
 #  1. xcrun defaults to the MacOSX27 SDK, which the installed Swift compiler cannot
@@ -16,17 +23,21 @@ set -e
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 BUILD="$HOME/openclaw-menubar-build"
-APP="$HOME/Desktop/OpenClaw.app"
+DEFAULT_APP="$HOME/Desktop/OpenClaw.app"
+APP="${OPENCLAW_APP_OUT:-$DEFAULT_APP}"
+STAGING=0
+[ "$APP" != "$DEFAULT_APP" ] && STAGING=1
 LSREG=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
 
 rm -rf "$BUILD"; mkdir -p "$BUILD/assets"
 
 echo "=== 0. source files ==="
-for f in main.swift icon_compose.swift assets/lobster1024.png; do
+for f in main.swift icon_compose.swift openclaw-ctl.sh assets/lobster1024.png; do
   [ -f "$HERE/$f" ] || { echo "missing $HERE/$f"; exit 1; }
 done
 cp "$HERE/main.swift" "$BUILD/main.swift"
 cp "$HERE/icon_compose.swift" "$BUILD/icon_compose.swift"
+cp "$HERE/openclaw-ctl.sh" "$BUILD/openclaw-ctl.sh"
 cp "$HERE/assets/lobster1024.png" "$BUILD/assets/lobster1024.png"
 
 SDK=$(/bin/ls -d /Library/Developer/CommandLineTools/SDKs/MacOSX26*.sdk 2>/dev/null | /usr/bin/head -1)
@@ -62,6 +73,10 @@ cp "$BUILD/ClawLauncher" "$BUNDLE/Contents/MacOS/ClawLauncher"
 cp "$BUILD/assets/claw.png"    "$BUNDLE/Contents/Resources/claw.png"
 cp "$BUILD/assets/claw@2x.png" "$BUNDLE/Contents/Resources/claw@2x.png"
 cp "$BUILD/assets/AppIcon.icns" "$BUNDLE/Contents/Resources/AppIcon.icns"
+# Bundle the service layer so a downloaded copy works with no manual setup.
+# main.swift's resolveCtlPath() finds it via Bundle.main.
+cp "$BUILD/openclaw-ctl.sh" "$BUNDLE/Contents/Resources/openclaw-ctl.sh"
+chmod +x "$BUNDLE/Contents/Resources/openclaw-ctl.sh"
 printf 'APPL????' > "$BUNDLE/Contents/PkgInfo"
 cat > "$BUNDLE/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -75,8 +90,8 @@ cat > "$BUNDLE/Contents/Info.plist" <<'PLIST'
     <key>CFBundleIconFile</key><string>AppIcon</string>
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>CFBundleSignature</key><string>????</string>
-    <key>CFBundleShortVersionString</key><string>1.0</string>
-    <key>CFBundleVersion</key><string>1</string>
+    <key>CFBundleShortVersionString</key><string>1.1</string>
+    <key>CFBundleVersion</key><string>2</string>
     <key>LSUIElement</key><true/>
     <key>LSMinimumSystemVersion</key><string>13.0</string>
     <key>NSHighResolutionCapable</key><true/>
@@ -87,7 +102,18 @@ PLIST
 echo "=== 6. ad-hoc sign ==="
 /usr/bin/codesign --force --sign - "$BUNDLE" 2>&1 | tail -1 || true
 
-echo "=== 7. install (remove destination first: cp -R nests otherwise) ==="
+echo "=== 7. install ==="
+if [ "$STAGING" = "1" ]; then
+  rm -rf "$APP"
+  mkdir -p "$(dirname "$APP")"
+  cp -R "$BUNDLE" "$APP"
+  echo "  staged at: $APP"
+  echo "  (skipped: killing a running ClawLauncher, replacing the Desktop app,"
+  echo "            Finder/icon-cache refresh, launching)"
+  echo "DONE (staging build, Desktop app untouched)"
+  exit 0
+fi
+
 pkill -f "ClawLauncher" 2>/dev/null || true
 sleep 1
 rm -rf "$APP"

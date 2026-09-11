@@ -1,5 +1,7 @@
 # 🦞 OpenClaw 龙虾 · macOS 菜单栏版
 
+[English](README.en.md) | 中文
+
 给 [OpenClaw](https://github.com/openclaw/openclaw) 网关做一个**一键开关**:右上角一只龙虾,
 **左键**开 Control UI,**右键**开关网关,退出即停服务。
 
@@ -25,8 +27,7 @@
 xattr -d com.apple.quarantine OpenClaw.app
 ```
 
-⚠️ **下载版需要 `openclaw-ctl.sh` 在 `~/DeepSeekHarness/bin/` 下**(app 里写死了这个路径)。
-原因与替代方案见下面「[服务层脚本放哪](#服务层脚本放哪)」。
+**不需要任何额外安装步骤** —— 服务层脚本 `openclaw-ctl.sh` 已经打进 app 包里了。
 
 ## 用法
 
@@ -58,44 +59,62 @@ Windows 版要费劲藏控制台,Mac 不需要。
 ## 目录
 
 ```
-main.swift         # 主程序(Swift / Cocoa)
+main.swift         # 主程序(Swift / Cocoa),含 openclaw-ctl.sh 的查找逻辑
 icon_compose.swift # 合成 app 图标(浅色卡片 + 龙虾)
 svg2png.swift      # SVG → 透明 PNG(qlmanage 会垫白底,不能用)
 make_assets.sh     # 从已装的 OpenClaw 包重新导出图标素材
-build.sh           # 编译 + 打包 + 安装到 ~/Desktop/OpenClaw.app
+build.sh           # 编译 + 打包 + 安装(支持 OPENCLAW_APP_OUT 暂存构建)
 openclaw-ctl.sh    # 服务层:start/stop/restart/status/pid/url/open/log
 assets/
   favicon.svg         # 官方矢量吉祥物(从 npm 包复制)
   lobster1024.png     # 1024×1024 透明龙虾
   claw.png / claw@2x.png   # 菜单栏 18pt @1x/@2x
   apple-touch-icon.png     # 官方 180px 备选
+dist/               # 打包好的 .app.zip
 ```
 
 ## 服务层脚本放哪
 
-⚠️ **这是唯一的部署约束。** `main.swift` 顶部有一行:
+app 只是 shell out 到 `openclaw-ctl.sh`,自己不实现任何网关逻辑。
+**从 v1.1 起它已经打包在 app 内部**,所以下载版开箱即用,不用手动放任何东西。
 
-```swift
-let CTL = "\(HOME)/DeepSeekHarness/bin/openclaw-ctl.sh"
+想用自己的脚本(或放在别处)时,按这个顺序查找,**第一个可执行的胜出**:
+
+| # | 位置 | 用途 |
+|---|---|---|
+| 1 | `$OPENCLAW_MENUBAR_CTL` | 环境变量,临时覆盖 |
+| 2 | `~/.config/openclaw-menubar/config.json` 里的 `ctlPath` | 持久覆盖,不用重编译 |
+| 3 | **app 内置** `Contents/Resources/openclaw-ctl.sh` | 默认,开箱即用 |
+| 4 | `~/.local/bin/openclaw-ctl.sh` | 自己装的 |
+| 5 | `~/DeepSeekHarness/bin/openclaw-ctl.sh` | 老版本写死的位置,兼容用 |
+
+```jsonc
+// ~/.config/openclaw-menubar/config.json
+{
+  "ctlPath": "~/bin/my-openclaw-ctl.sh"   // 支持 ~ 展开
+}
 ```
 
-app 只是 shell out 到这个脚本,所以**脚本必须在那个路径**,否则菜单项点了没反应。
-下载预编译版的人要注意这一点(`build.sh` 不会自动帮你放)。
-
-三个办法任选:
-
-1. 把 `openclaw-ctl.sh` 复制到 `~/DeepSeekHarness/bin/`(保持默认,不用改代码)
-2. 改 `main.swift` 里的 `CTL` 常量指向你放的位置,然后 `zsh build.sh`
-3. 干脆不用 `openclaw-ctl.sh`,自己写个同名脚本放那个路径,只要支持 `status` / `start` / `stop` 三个子命令
+自定义脚本只要支持 `status` / `start` / `stop` 三个子命令即可
+(`main.swift` 只调这三个)。**一个都找不到时菜单项不会静默失效** ——
+会在提示里告诉你去哪放。
 
 ## 构建
 
 ```sh
-zsh build.sh          # 重新编译并安装
+zsh build.sh          # 重新编译并安装到桌面
 zsh make_assets.sh    # 升级 OpenClaw 后刷新图标素材
 ```
 
 产物:`~/Desktop/OpenClaw.app`(bundle id `local.openclaw.menubar`,ad-hoc 签名)
+
+不想覆盖已装的那份(比如只想打个发行包):
+
+```sh
+OPENCLAW_APP_OUT=/tmp/staging/OpenClaw.app zsh build.sh
+```
+
+这个模式下**不会**替换桌面上的 app、不会杀掉正在跑的进程、不会动 Finder、也不会启动产物。
 
 ## 服务层行为
 
@@ -106,19 +125,35 @@ zsh make_assets.sh    # 升级 OpenClaw 后刷新图标素材
 - 判定"在跑"的唯一依据是 **18789 端口有没有监听进程**(`lsof`),
   因为 `launchctl list` 里可能是个崩溃重启中的 job
 
-## 图标是怎么来的
+## 🖼️ 图标出处
 
-OpenClaw 官方吉祥物的**矢量图**就在它自己的 npm 包里:
-`~/.local/node/lib/node_modules/openclaw/dist/control-ui/favicon.svg`
+**菜单栏图标和 app 图标都来自 OpenClaw 官方吉祥物,不是我画的。**
 
-`svg2png.swift` 把它渲染成 1024×1024 **透明背景** PNG 再用 ——
-用 `qlmanage -t` 渲染会垫一层**不透明白底**,放进菜单栏就是一块白疙瘩,不能用。
-`NSImage` 能直接读 SVG 并按目标尺寸重新栅格化,所以放大到 1024 依然锐利。
+- **原始版权:OpenClaw 项目** —— [openclaw/openclaw](https://github.com/openclaw/openclaw)
+- **来源文件**:OpenClaw 官方 npm 包内的 `dist/control-ui/favicon.svg`
+  (本机路径 `~/.local/node/lib/node_modules/openclaw/dist/control-ui/favicon.svg`)
+  矢量原图已收录在 [`assets/favicon.svg`](assets/favicon.svg)
+- **收录渠道**:直接取自 npm 包,未经过任何第三方图标站
+
+本仓库对原图**没有做美术改动**,只做了机械处理:
+
+| 文件 | 怎么来的 |
+|---|---|
+| `assets/lobster1024.png` | SVG → 1024×1024 **透明背景** PNG(`svg2png.swift`) |
+| `assets/claw.png` / `claw@2x.png` | 上者缩放成 18px / 36px 菜单栏图标 |
+| `Contents/Resources/AppIcon.icns` | 上者叠在渐变卡片上(`icon_compose.swift`)后转 icns |
+
+> 若 OpenClaw 官方希望调整署名、更换或删除这些素材,提 issue 立即处理。
+
+### 两个技术坑
+
+`svg2png.swift` 是必需品,不是洁癖:**用 `qlmanage -t` 渲染 SVG 会垫一层不透明白底**,
+放进菜单栏就是一块白疙瘩。`NSImage` 能直接读 SVG 并按目标尺寸重新栅格化,放大到 1024 依然锐利。
 
 菜单栏图标同时塞 18px(@1x)和 36px(@2x)两个 rep:
 `NSImage(contentsOfFile:)` **不会**自动加载 `@2x` 兄弟文件,只塞一个的话 Retina 下会发虚。
 
-素材版权归 OpenClaw 项目所有,这里只是为了菜单栏图标和上游品牌一致才内置。
+完整第三方素材声明见 [NOTICE](NOTICE)。
 
 ## ⚠️ 需要权限吗
 

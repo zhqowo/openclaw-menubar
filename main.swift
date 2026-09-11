@@ -8,13 +8,61 @@
 //
 // The gateway is a LaunchAgent on macOS, so starting it is silent: launchd runs it
 // in the background with no terminal window. All real work lives in
-// ~/DeepSeekHarness/bin/openclaw-ctl.sh, which this app just shells out to.
+// openclaw-ctl.sh, which this app just shells out to — see resolveCtlPath() for
+// where that script is looked up.
 import Cocoa
 
 let PORT: UInt16 = 18789
 let HOME = NSHomeDirectory()
-let CTL = "\(HOME)/DeepSeekHarness/bin/openclaw-ctl.sh"
 let CONFIG = "\(HOME)/.openclaw/openclaw.json"
+
+// MARK: - locating the service-layer script
+
+/// Optional config, so the script location can be overridden without recompiling.
+///
+/// `~/.config/openclaw-menubar/config.json`
+/// ```json
+/// { "ctlPath": "~/bin/openclaw-ctl.sh" }
+/// ```
+func configuredCtlPath() -> String? {
+    let path = "\(HOME)/.config/openclaw-menubar/config.json"
+    guard let data = FileManager.default.contents(atPath: path),
+          let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+          let ctl = obj["ctlPath"] as? String, !ctl.isEmpty
+    else { return nil }
+    return (ctl as NSString).expandingTildeInPath
+}
+
+/// Find `openclaw-ctl.sh`. First executable path wins:
+///
+///   1. `$OPENCLAW_MENUBAR_CTL`
+///   2. `ctlPath` in `~/.config/openclaw-menubar/config.json`
+///   3. **bundled inside the app** (`Contents/Resources/openclaw-ctl.sh`)
+///   4. `~/.local/bin/openclaw-ctl.sh`
+///   5. `~/DeepSeekHarness/bin/openclaw-ctl.sh` — where earlier builds expected it
+///
+/// Step 3 is what makes a downloaded copy work out of the box; earlier builds
+/// hardcoded step 5, which is the author's own machine and nobody else's.
+func resolveCtlPath() -> String? {
+    var candidates: [String] = []
+
+    if let env = ProcessInfo.processInfo.environment["OPENCLAW_MENUBAR_CTL"], !env.isEmpty {
+        candidates.append((env as NSString).expandingTildeInPath)
+    }
+    if let configured = configuredCtlPath() {
+        candidates.append(configured)
+    }
+    if let bundled = Bundle.main.path(forResource: "openclaw-ctl", ofType: "sh") {
+        candidates.append(bundled)
+    }
+    candidates.append("\(HOME)/.local/bin/openclaw-ctl.sh")
+    candidates.append("\(HOME)/DeepSeekHarness/bin/openclaw-ctl.sh")
+
+    return candidates.first { FileManager.default.isExecutableFile(atPath: $0) }
+}
+
+/// nil when nothing was found — surfaced to the user instead of failing silently.
+let CTL = resolveCtlPath()
 
 // MARK: - helpers
 
@@ -57,7 +105,15 @@ func shell(_ args: [String]) -> String {
     return String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
 }
 
-func ctl(_ arg: String) -> String { shell([CTL, arg]) }
+func ctl(_ arg: String) -> String {
+    // shell() joins the arguments into one `zsh -lc` line, so the path needs quoting —
+    // an app dragged into a folder with a space would otherwise split into two words.
+    guard let path = CTL else {
+        return "找不到 openclaw-ctl.sh。请把仓库里的它放到 ~/.local/bin/,"
+             + "或设置 OPENCLAW_MENUBAR_CTL —— 详见 README「服务层脚本放哪」。"
+    }
+    return shell(["'\(path)'", arg])
+}
 
 /// Run an AppleScript snippet through osascript and return its stdout.
 func runOsascript(_ script: String) -> String {
