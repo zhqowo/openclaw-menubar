@@ -1,0 +1,11 @@
+# build artifacts
+.build/
+*.o
+*.dSYM/
+
+# macOS
+.DS_Store
+._*
+
+# dist (打包产物照常入库,和兄弟仓库一致)
+.DS_Store
